@@ -14,6 +14,46 @@ here's my personal layout:
 
 using the [via web app](http://usevia.app) (here's a great [tutorial](https://epomaker.com/blogs/guides/how-to-use-via-for-beginners)), under settings: enable the `design` option. since this keeb uses a hacky implementation of the standard, ensure you enabled the `Use V2 definitions (deprecated)` option when loading the via.json files. there's a discrete config for both wired/bluetooth and 2.4g modes for some reason. both the standard wired and pro use the [via-usb.json](AKS068-via-usb.json) file. the [via-24g.json](AKS068-via-24g.json) only applies to the pro version (you will need to disconnect and reconnect modes to flash both seperately). once the config is loaded you can import my [custom layout](AKS068-layout.json) or use the designer to create and export your own.
 
+## loading layouts (the website Import is broken)
+
+this keyboard's firmware botches the one VIA command the website uses to **import** a
+saved layout (the bulk `DYNAMIC_KEYMAP_SET_BUFFER`, `0x13`): it returns the wrong
+response header, so usevia.app aborts with `Error: Receiving incorrect response for
+command`. you can still *edit* keys one at a time in the GUI, but loading a whole
+exported layout fails.
+
+[`aks068.py`](aks068.py) works around this. it talks the VIA HID protocol directly,
+reading the keymap in bulk (`0x12`, which works) and writing it back **one key at a
+time** (`0x05`, which also works) — the exact path the broken bulk import avoids. it
+reads and writes the standard VIA export format, so you keep designing visually on
+usevia.app and only use this to do the load the website can't.
+
+it's a self-contained [uv](https://docs.astral.sh/uv/) script (deps declared inline,
+nothing to install):
+
+```sh
+uv run aks068.py devices                              # list connected keyboards
+uv run aks068.py save -f mylayout.json                # read keymap off the keyboard
+uv run aks068.py load -f mylayout.json --dry-run      # preview the diff, write nothing
+uv run aks068.py load -f mylayout.json --backup before.json   # load (backup first)
+uv run aks068.py --pid 0x5088 load -f mylayout.json   # target 2.4G mode (pro)
+```
+
+`load` backs up the current keymap, writes only the keys that differ, then reads
+everything back and verifies. it only ever sends keymap read/write commands — never
+reset or bootloader. keymap only (macros/encoders are not transferred).
+
+### files
+
+* [AKS068-via-usb.json](AKS068-via-usb.json) — wired/bt VIA definition, with the `customKeycodes` relabeled to what the keys *actually* do (side-light controls, win/mac switch, screen brightness), cross-referenced against the factory layout and the manual. the upstream/vendor labels are for the pro variant and are wrong on this board.
+* [AKS068-via-24g.json](AKS068-via-24g.json) — 2.4g definition (pro only; xero's, unchanged)
+* [AKS068-factory-layout.json](AKS068-factory-layout.json) — untouched factory keymap dumped from a brand-new keyboard, handy as a reference / restore point
+* [AKS068-layout.json](AKS068-layout.json) — xero's original custom layout
+* [layouts/](layouts/) — my personal layouts (`stas-base`, and `stas-cleaned` with the fn layers stripped of pass-through letters)
+
+> [!NOTE]
+> a fork of [xero/aks068-via](https://github.com/xero/aks068-via) — the `aks068.py` tool, the corrected key labels, and the factory layout are additions.
+
 
 ## references
 
